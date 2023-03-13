@@ -1,16 +1,16 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
+using Volo.Abp;
 
 namespace MyCompanyName.MyProjectName;
 
 public class Program
 {
-    public static async Task<int> Main(string[] args)
+    public async static Task<int> Main(string[] args)
     {
         Log.Logger = new LoggerConfiguration()
 #if DEBUG
@@ -27,11 +27,33 @@ public class Program
         try
         {
             Log.Information("Starting console host.");
-            await CreateHostBuilder(args).RunConsoleAsync();
+
+            var builder = Host.CreateDefaultBuilder(args);
+
+            builder.ConfigureServices(services =>
+            {
+                services.AddHostedService<MyProjectNameHostedService>();
+                services.AddApplicationAsync<MyProjectNameModule>(options =>
+                {
+                    options.Services.ReplaceConfiguration(services.GetConfiguration());
+                    options.Services.AddLogging(loggingBuilder => loggingBuilder.AddSerilog());
+                });
+            }).AddAppSettingsSecretsJson().UseAutofac().UseConsoleLifetime();
+
+            var host = builder.Build();
+            await host.Services.GetRequiredService<IAbpApplicationWithExternalServiceProvider>().InitializeAsync(host.Services);
+
+            await host.RunAsync();
+
             return 0;
         }
         catch (Exception ex)
         {
+            if (ex is HostAbortedException)
+            {
+                throw;
+            }
+
             Log.Fatal(ex, "Host terminated unexpectedly!");
             return 1;
         }
@@ -39,19 +61,5 @@ public class Program
         {
             Log.CloseAndFlush();
         }
-
     }
-
-    internal static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .UseAutofac()
-            .UseSerilog()
-            .ConfigureAppConfiguration((context, config) =>
-            {
-                    //setup your additional configuration sources
-                })
-            .ConfigureServices((hostContext, services) =>
-            {
-                services.AddApplication<MyProjectNameModule>();
-            });
 }

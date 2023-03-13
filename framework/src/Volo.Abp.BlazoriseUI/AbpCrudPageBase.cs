@@ -176,6 +176,7 @@ public abstract class AbpCrudPageBase<
 {
     [Inject] protected TAppService AppService { get; set; }
     [Inject] protected IStringLocalizer<AbpUiResource> UiLocalizer { get; set; }
+    [Inject] public IAbpEnumLocalizer AbpEnumLocalizer { get; set; }
 
     protected virtual int PageSize { get; } = LimitedResultRequestDto.DefaultMaxResultCount;
 
@@ -212,7 +213,7 @@ public abstract class AbpCrudPageBase<
         EntityActions = new EntityActionDictionary();
     }
 
-    protected override async Task OnInitializedAsync()
+    protected async override Task OnInitializedAsync()
     {
         await SetPermissionsAsync();
         await SetEntityActionsAsync();
@@ -220,14 +221,14 @@ public abstract class AbpCrudPageBase<
         await InvokeAsync(StateHasChanged);
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected async override Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            await base.OnAfterRenderAsync(firstRender);
             await SetToolbarItemsAsync();
             await SetBreadcrumbItemsAsync();
         }
+        await base.OnAfterRenderAsync(firstRender);
     }
 
 
@@ -307,7 +308,7 @@ public abstract class AbpCrudPageBase<
     protected virtual async Task OnDataGridReadAsync(DataGridReadDataEventArgs<TListViewModel> e)
     {
         CurrentSorting = e.Columns
-            .Where(c => c.SortDirection != SortDirection.None)
+            .Where(c => c.SortDirection != SortDirection.Default)
             .Select(c => c.Field + (c.SortDirection == SortDirection.Descending ? " DESC" : ""))
             .JoinAsString(",");
         CurrentPage = e.Page;
@@ -350,6 +351,7 @@ public abstract class AbpCrudPageBase<
 
     protected virtual Task CloseCreateModalAsync()
     {
+        NewEntity = new TCreateViewModel();
         return InvokeAsync(CreateModal.Hide);
     }
 
@@ -464,6 +466,7 @@ public abstract class AbpCrudPageBase<
 
     protected virtual async Task OnCreatedEntityAsync()
     {
+        NewEntity = new TCreateViewModel();
         await GetEntitiesAsync();
 
         await InvokeAsync(CreateModal.Hide);
@@ -624,7 +627,7 @@ public abstract class AbpCrudPageBase<
                     if (propertyInfo.Type.IsEnum)
                     {
                         column.ValueConverter = (val) =>
-                            EnumHelper.GetLocalizedMemberName(propertyInfo.Type, val.As<ExtensibleObject>().ExtraProperties[propertyInfo.Name], StringLocalizerFactory);
+                            AbpEnumLocalizer.GetString(propertyInfo.Type, val.As<ExtensibleObject>().ExtraProperties[propertyInfo.Name], new IStringLocalizer[]{ StringLocalizerFactory.CreateDefaultOrNull() });
                     }
 
                     yield return column;

@@ -74,16 +74,26 @@
     abp.dom.initializers.initializeAutocompleteSelects = function ($autocompleteSelects) {
         if ($autocompleteSelects.length) {
             $autocompleteSelects.each(function () {
-                var $select = $(this);
-                var url = $(this).data("autocompleteApiUrl");
-                var displayName = $(this).data("autocompleteDisplayProperty");
-                var displayValue = $(this).data("autocompleteValueProperty");
-                var itemsPropertyName = $(this).data("autocompleteItemsProperty");
-                var filterParamName = $(this).data("autocompleteFilterParamName");
-                var selectedText = $(this).data("autocompleteSelectedItemName");
-                var name = $(this).attr("name");
-                var selectedTextInputName = name.substring(0, name.length - 1) + "_Text]";
-                var selectedTextInput = $('<input>', {
+                let $select = $(this);
+                let url = $(this).data("autocompleteApiUrl");
+                let displayName = $(this).data("autocompleteDisplayProperty");
+                let displayValue = $(this).data("autocompleteValueProperty");
+                let itemsPropertyName = $(this).data("autocompleteItemsProperty");
+                let filterParamName = $(this).data("autocompleteFilterParamName");
+                let selectedText = $(this).data("autocompleteSelectedItemName");
+                let parentSelector = $(this).data("autocompleteParentSelector");
+                let allowClear = $(this).data("autocompleteAllowClear");
+                let placeholder = $(this).data("autocompletePlaceholder");
+                if (allowClear && placeholder == undefined) {
+                    placeholder = " ";
+                }
+
+                if (!parentSelector && $select.parents(".modal.fade").length === 1) {
+                    parentSelector = ".modal.fade";
+                }
+                let name = $(this).attr("name");
+                let selectedTextInputName = name + "_Text";
+                let selectedTextInput = $('<input>', {
                     type: 'hidden',
                     id: selectedTextInputName,
                     name: selectedTextInputName,
@@ -95,15 +105,16 @@
                 $select.select2({
                     ajax: {
                         url: url,
+                        delay: 250,
                         dataType: "json",
                         data: function (params) {
-                            var query = {};
+                            let query = {};
                             query[filterParamName] = params.term;
                             return query;
                         },
                         processResults: function (data) {
-                            var retVal = [];
-                            var items = data;
+                            let retVal = [];
+                            let items = data;
                             if (itemsPropertyName) {
                                 items = data[itemsPropertyName];
                             }
@@ -119,7 +130,14 @@
                             };
                         }
                     },
-                    width: '100%'
+                    width: '100%',
+                    dropdownParent: parentSelector ? $(parentSelector) : $('body'),
+                    allowClear: allowClear,
+                    language: abp.localization.currentCulture.cultureName,
+                    placeholder: {
+                        id: '-1',
+                        text: placeholder
+                    }
                 });
                 $select.on('select2:select', function (e) {
                     selectedTextInput.val(e.params.data.text);

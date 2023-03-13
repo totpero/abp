@@ -8,12 +8,12 @@ import { Confirmation } from '../models/confirmation';
 @Injectable({ providedIn: 'root' })
 export class ConfirmationService {
   status$!: Subject<Confirmation.Status>;
-  confirmation$ = new ReplaySubject<Confirmation.DialogData>(1);
+  confirmation$ = new ReplaySubject<Confirmation.DialogData | null>(1);
 
   private containerComponentRef!: ComponentRef<ConfirmationComponent>;
 
   clear = (status: Confirmation.Status = Confirmation.Status.dismiss) => {
-    this.confirmation$.next();
+    this.confirmation$.next(null);
     this.status$.next(status);
   };
 
@@ -93,7 +93,7 @@ export class ConfirmationService {
         debounceTime(150),
         filter((key: KeyboardEvent) => key && key.key === 'Escape'),
       )
-      .subscribe(_ => {
+      .subscribe(() => {
         this.clear();
       });
   }

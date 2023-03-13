@@ -13,6 +13,8 @@ namespace Volo.Abp.Cli.Commands;
 
 public class GetSourceCommand : IConsoleCommand, ITransientDependency
 {
+    public const string Name = "get-source";
+    
     private readonly SourceCodeDownloadService _sourceCodeDownloadService;
     public ModuleProjectBuilder ModuleProjectBuilder { get; }
 
@@ -37,13 +39,8 @@ public class GetSourceCommand : IConsoleCommand, ITransientDependency
         }
 
         var version = commandLineArgs.Options.GetOrNull(Options.Version.Short, Options.Version.Long);
-        if (version != null)
-        {
-            Logger.LogInformation("Version: " + version);
-        }
 
         var outputFolder = GetOutPutFolder(commandLineArgs);
-        Logger.LogInformation("Output folder: " + outputFolder);
 
         var gitHubAbpLocalRepositoryPath = commandLineArgs.Options.GetOrNull(Options.GitHubAbpLocalRepositoryPath.Long);
         if (gitHubAbpLocalRepositoryPath != null)

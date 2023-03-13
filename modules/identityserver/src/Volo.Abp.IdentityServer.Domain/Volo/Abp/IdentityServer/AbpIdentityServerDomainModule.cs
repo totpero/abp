@@ -1,4 +1,6 @@
-﻿using IdentityServer4.Services;
+﻿using System.Threading.Tasks;
+using IdentityServer4.Configuration;
+using IdentityServer4.Services;
 using IdentityServer4.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -70,13 +72,7 @@ public class AbpIdentityServerDomainModule : AbpModule
         var configuration = services.GetConfiguration();
         var builderOptions = services.ExecutePreConfiguredActions<AbpIdentityServerBuilderOptions>();
 
-        var identityServerBuilder = services.AddIdentityServer(options =>
-        {
-            options.Events.RaiseErrorEvents = true;
-            options.Events.RaiseInformationEvents = true;
-            options.Events.RaiseFailureEvents = true;
-            options.Events.RaiseSuccessEvents = true;
-        });
+        var identityServerBuilder = AddIdentityServer(services, builderOptions);
 
         if (builderOptions.AddDeveloperSigningCredential)
         {
@@ -109,6 +105,37 @@ public class AbpIdentityServerDomainModule : AbpModule
         }
     }
 
+    private static IIdentityServerBuilder AddIdentityServer(IServiceCollection services, AbpIdentityServerBuilderOptions abpIdentityServerBuilderOptions)
+    {
+        services.Configure<IdentityServerOptions>(options =>
+        {
+            options.Events.RaiseErrorEvents = true;
+            options.Events.RaiseInformationEvents = true;
+            options.Events.RaiseFailureEvents = true;
+            options.Events.RaiseSuccessEvents = true;
+        });
+
+        var identityServerBuilder = services.AddIdentityServerBuilder()
+            .AddRequiredPlatformServices()
+            .AddCoreServices()
+            .AddDefaultEndpoints()
+            .AddPluggableServices()
+            .AddValidators()
+            .AddResponseGenerators()
+            .AddDefaultSecretParsers()
+            .AddDefaultSecretValidators();
+
+        if (abpIdentityServerBuilderOptions.AddIdentityServerCookieAuthentication)
+        {
+            identityServerBuilder.AddCookieAuthentication();
+        }
+
+        // provide default in-memory implementation, not suitable for most production scenarios
+        identityServerBuilder.AddInMemoryPersistedGrants();
+
+        return identityServerBuilder;
+    }
+
     public override void PostConfigureServices(ServiceConfigurationContext context)
     {
         OneTimeRunner.Run(() =>
@@ -133,17 +160,22 @@ public class AbpIdentityServerDomainModule : AbpModule
         });
     }
 
-    public override void OnApplicationInitialization(ApplicationInitializationContext context)
+    public async override Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
     {
         var options = context.ServiceProvider.GetRequiredService<IOptions<TokenCleanupOptions>>().Value;
         if (options.IsCleanupEnabled)
         {
-            context.ServiceProvider
+            await context.ServiceProvider
                 .GetRequiredService<IBackgroundWorkerManager>()
-                .Add(
+                .AddAsync(
                     context.ServiceProvider
                         .GetRequiredService<TokenCleanupBackgroundWorker>()
                 );
         }
+    }
+
+    public override void OnApplicationInitialization(ApplicationInitializationContext context)
+    {
+        AsyncHelper.RunSync(() => OnApplicationInitializationAsync(context));
     }
 }

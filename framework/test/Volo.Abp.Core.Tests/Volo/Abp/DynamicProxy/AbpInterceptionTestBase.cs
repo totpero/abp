@@ -7,10 +7,10 @@ using Xunit;
 
 namespace Volo.Abp.DynamicProxy;
 
-public abstract class AbpInterceptionTestBase<TStartupModule> : AbpIntegratedTest<TStartupModule>
+public abstract class AbpInterceptionTestBase<TStartupModule> : AbpAsyncIntegratedTest<TStartupModule>, IAsyncLifetime
     where TStartupModule : IAbpModule
 {
-    protected override void BeforeAddApplication(IServiceCollection services)
+    protected override Task BeforeAddApplicationAsync(IServiceCollection services)
     {
         services.AddTransient<SimpleAsyncInterceptor>();
         services.AddTransient<SimpleAsyncInterceptor2>();
@@ -19,7 +19,7 @@ public abstract class AbpInterceptionTestBase<TStartupModule> : AbpIntegratedTes
         services.AddTransient<SimpleResultCacheTestInterceptor>();
         services.AddTransient<CachedTestObject>();
 
-        services.OnRegistred(registration =>
+        services.OnRegistered(registration =>
         {
             if (typeof(SimpleInterceptionTargetClass) == registration.ImplementationType)
             {
@@ -32,6 +32,8 @@ public abstract class AbpInterceptionTestBase<TStartupModule> : AbpIntegratedTes
                 registration.Interceptors.Add<SimpleResultCacheTestInterceptor>();
             }
         });
+
+        return Task.CompletedTask;
     }
 
     [Fact]

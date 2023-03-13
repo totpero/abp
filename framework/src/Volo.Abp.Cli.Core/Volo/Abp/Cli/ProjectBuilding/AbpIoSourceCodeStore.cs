@@ -8,12 +8,15 @@ using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Volo.Abp.Cli.GitHub;
 using Volo.Abp.Cli.Http;
 using Volo.Abp.Cli.ProjectBuilding.Templates.App;
 using Volo.Abp.Cli.ProjectBuilding.Templates.Console;
+using Volo.Abp.Cli.ProjectBuilding.Templates.Maui;
 using Volo.Abp.Cli.ProjectBuilding.Templates.MvcModule;
 using Volo.Abp.Cli.ProjectBuilding.Templates.Wpf;
 using Volo.Abp.DependencyInjection;
@@ -82,6 +85,13 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
 
             version = latestVersion;
         }
+        else
+        {
+            if (!await IsVersionExists(name, version))
+            {
+                throw new Exception("There is no version found with given version: " + version);
+            }
+        }
 
         var nugetVersion = (await GetTemplateNugetVersionAsync(name, type, version)) ?? version;
 
@@ -141,7 +151,7 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
             var client = _cliHttpClientFactory.CreateClient();
             var stringContent = new StringContent(
                 JsonSerializer.Serialize(new GetLatestSourceCodeVersionDto
-                { Name = name, IncludePreReleases = includePreReleases }),
+                    {Name = name, IncludePreReleases = includePreReleases}),
                 Encoding.UTF8,
                 MimeTypes.Application.Json
             );
@@ -174,7 +184,7 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
             var client = _cliHttpClientFactory.CreateClient();
 
             var stringContent = new StringContent(
-                JsonSerializer.Serialize(new GetTemplateNugetVersionDto { Name = name, Version = version }),
+                JsonSerializer.Serialize(new GetTemplateNugetVersionDto {Name = name, Version = version}),
                 Encoding.UTF8,
                 MimeTypes.Application.Json
             );
@@ -190,6 +200,32 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    private async Task<bool> IsVersionExists(string templateName, string version)
+    {
+        var url = $"{CliUrls.WwwAbpIo}api/download/all-versions?includePreReleases=true";
+
+        try
+        {
+            var client = _cliHttpClientFactory.CreateClient();
+
+            using (var response = await client.GetAsync(url,
+                _cliHttpClientFactory.GetCancellationToken(TimeSpan.FromMinutes(10))))
+            {
+                await RemoteServiceExceptionHandler.EnsureSuccessfulHttpResponseAsync(response);
+                var result = await response.Content.ReadAsStringAsync();
+                var versions = JsonSerializer.Deserialize<GithubReleaseVersions>(result);
+
+                return templateName.Contains("LeptonX") ? 
+                    versions.LeptonXVersions.Any(v => v.Name == version) :
+                    versions.FrameworkAndCommercialVersions.Any(v => v.Name == version);
+            }
+        }
+        catch (Exception)
+        {
+            return true;
         }
     }
 
@@ -225,6 +261,12 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
         }
         catch (Exception ex)
         {
+            if(ex is UserFriendlyException)
+            {
+                Logger.LogWarning(ex.Message);
+                throw;
+            }
+
             Console.WriteLine("Error occured while downloading source-code from {0} : {1}{2}{3}", url,
                 responseMessage?.ToString(), Environment.NewLine, ex.Message);
             throw;
@@ -247,7 +289,7 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
         }
 
         var matches = Regex.Matches(stringBuilder.ToString(),
-            $"({AppTemplate.TemplateName}|{AppProTemplate.TemplateName}|{ModuleTemplate.TemplateName}|{ModuleProTemplate.TemplateName}|{ConsoleTemplate.TemplateName}|{WpfTemplate.TemplateName})-(.+).zip");
+            $"({AppTemplate.TemplateName}|{AppNoLayersProTemplate.TemplateName}|{AppNoLayersTemplate.TemplateName}|{AppProTemplate.TemplateName}|{ModuleTemplate.TemplateName}|{ModuleProTemplate.TemplateName}|{ConsoleTemplate.TemplateName}|{WpfTemplate.TemplateName}|{MauiTemplate.TemplateName})-(.+).zip");
         foreach (Match match in matches)
         {
             templateList.Add((match.Groups[1].Value, match.Groups[2].Value));
@@ -288,5 +330,12 @@ public class AbpIoSourceCodeStore : ISourceCodeStore, ITransientDependency
     public class GetVersionResultDto
     {
         public string Version { get; set; }
+    }
+
+    public class GithubReleaseVersions
+    {
+        public List<GithubRelease> FrameworkAndCommercialVersions { get; set; }
+        
+        public List<GithubRelease> LeptonXVersions { get; set; }
     }
 }

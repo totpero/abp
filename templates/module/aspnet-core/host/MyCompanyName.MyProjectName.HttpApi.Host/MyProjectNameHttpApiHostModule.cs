@@ -31,6 +31,7 @@ using Volo.Abp.PermissionManagement.EntityFrameworkCore;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.SettingManagement.EntityFrameworkCore;
 using Volo.Abp.Swashbuckle;
+using Volo.Abp.TenantManagement.EntityFrameworkCore;
 using Volo.Abp.VirtualFileSystem;
 
 namespace MyCompanyName.MyProjectName;
@@ -46,6 +47,7 @@ namespace MyCompanyName.MyProjectName;
     typeof(AbpAuditLoggingEntityFrameworkCoreModule),
     typeof(AbpPermissionManagementEntityFrameworkCoreModule),
     typeof(AbpSettingManagementEntityFrameworkCoreModule),
+    typeof(AbpTenantManagementEntityFrameworkCoreModule),
     typeof(AbpAspNetCoreSerilogModule),
     typeof(AbpSwashbuckleModule)
     )]
@@ -82,11 +84,11 @@ public class MyProjectNameHttpApiHostModule : AbpModule
             configuration["AuthServer:Authority"],
             new Dictionary<string, string>
             {
-                    {"MyProjectName", "MyProjectName API"}
+                {"MyProjectName", "MyProjectName API"}
             },
             options =>
             {
-                options.SwaggerDoc("v1", new OpenApiInfo { Title = "MyProjectName API", Version = "v1" });
+                options.SwaggerDoc("v1", new OpenApiInfo {Title = "MyProjectName API", Version = "v1"});
                 options.DocInclusionPredicate((docName, description) => true);
                 options.CustomSchemaIds(type => type.FullName);
             });
@@ -112,6 +114,7 @@ public class MyProjectNameHttpApiHostModule : AbpModule
             options.Languages.Add(new LanguageInfo("zh-Hant", "zh-Hant", "繁體中文"));
             options.Languages.Add(new LanguageInfo("de-DE", "de-DE", "Deutsch"));
             options.Languages.Add(new LanguageInfo("es", "es", "Español"));
+            options.Languages.Add(new LanguageInfo("el", "el", "Ελληνικά"));
         });
 
         context.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -140,10 +143,10 @@ public class MyProjectNameHttpApiHostModule : AbpModule
             {
                 builder
                     .WithOrigins(
-                        configuration["App:CorsOrigins"]
+                        configuration["App:CorsOrigins"]?
                             .Split(",", StringSplitOptions.RemoveEmptyEntries)
                             .Select(o => o.RemovePostFix("/"))
-                            .ToArray()
+                            .ToArray() ?? Array.Empty<string>()
                     )
                     .WithAbpExposedHeaders()
                     .SetIsOriginAllowedToAllowWildcardSubdomains()
@@ -187,7 +190,6 @@ public class MyProjectNameHttpApiHostModule : AbpModule
 
             var configuration = context.GetConfiguration();
             options.OAuthClientId(configuration["AuthServer:SwaggerClientId"]);
-            options.OAuthClientSecret(configuration["AuthServer:SwaggerClientSecret"]);
             options.OAuthScopes("MyProjectName");
         });
         app.UseAuditing();

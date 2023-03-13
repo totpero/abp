@@ -49,11 +49,25 @@ public class AbpSignInManager : SignInManager<IdentityUser>
                 var user = await UserManager.FindByNameAsync(userName);
                 if (user == null)
                 {
-                    user = await externalLoginProvider.CreateUserAsync(userName, externalLoginProviderInfo.Name);
+                    if (externalLoginProvider is IExternalLoginProviderWithPassword externalLoginProviderWithPassword)
+                    {
+                        user = await externalLoginProviderWithPassword.CreateUserAsync(userName, externalLoginProviderInfo.Name, password);
+                    }
+                    else
+                    {
+                        user = await externalLoginProvider.CreateUserAsync(userName, externalLoginProviderInfo.Name);
+                    }
                 }
                 else
                 {
-                    await externalLoginProvider.UpdateUserAsync(user, externalLoginProviderInfo.Name);
+                    if (externalLoginProvider is IExternalLoginProviderWithPassword externalLoginProviderWithPassword)
+                    {
+                        await externalLoginProviderWithPassword.UpdateUserAsync(user, externalLoginProviderInfo.Name, password);
+                    }
+                    else
+                    {
+                        await externalLoginProvider.UpdateUserAsync(user, externalLoginProviderInfo.Name);
+                    }
                 }
 
                 return await SignInOrTwoFactorAsync(user, isPersistent);
@@ -68,6 +82,12 @@ public class AbpSignInManager : SignInManager<IdentityUser>
         if (!user.IsActive)
         {
             Logger.LogWarning($"The user is not active therefore cannot login! (username: \"{user.UserName}\", id:\"{user.Id}\")");
+            return SignInResult.NotAllowed;
+        }
+
+        if (user.ShouldChangePasswordOnNextLogin)
+        {
+            Logger.LogWarning($"The user should change password! (username: \"{user.UserName}\", id:\"{user.Id}\")");
             return SignInResult.NotAllowed;
         }
 

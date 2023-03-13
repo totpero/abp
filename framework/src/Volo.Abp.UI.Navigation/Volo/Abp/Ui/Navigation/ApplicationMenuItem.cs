@@ -79,7 +79,8 @@ public class ApplicationMenuItem : IHasMenuItems, IHasSimpleStateCheckers<Applic
     /// <summary>
     /// Can be used to store a custom object related to this menu item. Optional.
     /// </summary>
-    public object CustomData { get; set; }
+    [NotNull]
+    public Dictionary<string, object> CustomData { get; } = new();
 
     /// <summary>
     /// Can be used to render the element with a specific Id for DOM selections.
@@ -91,16 +92,21 @@ public class ApplicationMenuItem : IHasMenuItems, IHasSimpleStateCheckers<Applic
     /// </summary>
     public string CssClass { get; set; }
 
+    /// <summary>
+    /// Can be used to group menu items.
+    /// </summary>
+    public string GroupName { get; set; }
+
     public ApplicationMenuItem(
         [NotNull] string name,
         [NotNull] string displayName,
         string url = null,
         string icon = null,
         int order = DefaultOrder,
-        object customData = null,
         string target = null,
         string elementId = null,
         string cssClass = null,
+        string groupName = null,
         string requiredPermissionName = null)
     {
         Check.NotNullOrWhiteSpace(name, nameof(name));
@@ -111,10 +117,10 @@ public class ApplicationMenuItem : IHasMenuItems, IHasSimpleStateCheckers<Applic
         Url = url;
         Icon = icon;
         Order = order;
-        CustomData = customData;
         Target = target;
         ElementId = elementId ?? GetDefaultElementId();
         CssClass = cssClass;
+        GroupName = groupName;
         RequiredPermissionName = requiredPermissionName;
         StateCheckers = new List<ISimpleStateChecker<ApplicationMenuItem>>();
         Items = new ApplicationMenuItemList();
@@ -128,6 +134,16 @@ public class ApplicationMenuItem : IHasMenuItems, IHasSimpleStateCheckers<Applic
     public ApplicationMenuItem AddItem([NotNull] ApplicationMenuItem menuItem)
     {
         Items.Add(menuItem);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a custom data item to <see cref="CustomData"/> with given key &amp; value.
+    /// </summary>
+    /// <returns>This <see cref="ApplicationMenuItem"/> itself.</returns>
+    public ApplicationMenuItem WithCustomData(string key, object value)
+    {
+        CustomData[key] = value;
         return this;
     }
 

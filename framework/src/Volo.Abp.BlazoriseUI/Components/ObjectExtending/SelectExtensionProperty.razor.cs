@@ -2,22 +2,19 @@
 using Microsoft.Extensions.Localization;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Blazorise;
+using Volo.Abp.AspNetCore.Components.Web;
 using Volo.Abp.Data;
 using Volo.Abp.Localization;
 using Volo.Abp.ObjectExtending;
 
 namespace Volo.Abp.BlazoriseUI.Components.ObjectExtending;
 
-public partial class SelectExtensionProperty<TEntity, TResourceType> : ComponentBase
+public partial class SelectExtensionProperty<TEntity, TResourceType>
     where TEntity : IHasExtraProperties
 {
     protected List<SelectItem<int>> SelectItems = new();
-
-    [Inject] public IStringLocalizerFactory StringLocalizerFactory { get; set; }
-
-    [Parameter] public TEntity Entity { get; set; }
-
-    [Parameter] public ObjectExtensionPropertyInfo PropertyInfo { get; set; }
 
     public int SelectedValue {
         get { return Entity.GetProperty<int>(PropertyInfo.Name); }
@@ -33,7 +30,7 @@ public partial class SelectExtensionProperty<TEntity, TResourceType> : Component
             selectItems.Add(new SelectItem<int>
             {
                 Value = (int)enumValue,
-                Text = EnumHelper.GetLocalizedMemberName(PropertyInfo.Type, enumValue, StringLocalizerFactory)
+                Text = AbpEnumLocalizer.GetString(PropertyInfo.Type, enumValue, new []{ StringLocalizerFactory.CreateDefaultOrNull() })
             });
         }
 

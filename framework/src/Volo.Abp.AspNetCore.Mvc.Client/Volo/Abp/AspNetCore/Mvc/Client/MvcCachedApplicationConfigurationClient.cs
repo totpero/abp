@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Options;
 using Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations;
 using Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations.ClientProxies;
 using Volo.Abp.Caching;
@@ -11,33 +12,29 @@ using Volo.Abp.Users;
 
 namespace Volo.Abp.AspNetCore.Mvc.Client;
 
-[ExposeServices(
-    typeof(MvcCachedApplicationConfigurationClient),
-    typeof(ICachedApplicationConfigurationClient),
-    typeof(IAsyncInitialize)
-    )]
 public class MvcCachedApplicationConfigurationClient : ICachedApplicationConfigurationClient, ITransientDependency
 {
     protected IHttpContextAccessor HttpContextAccessor { get; }
     protected AbpApplicationConfigurationClientProxy ApplicationConfigurationAppService { get; }
+    protected AbpApplicationLocalizationClientProxy ApplicationLocalizationClientProxy { get; }
     protected ICurrentUser CurrentUser { get; }
     protected IDistributedCache<ApplicationConfigurationDto> Cache { get; }
+    protected AbpAspNetCoreMvcClientCacheOptions Options { get; }
 
     public MvcCachedApplicationConfigurationClient(
         IDistributedCache<ApplicationConfigurationDto> cache,
         AbpApplicationConfigurationClientProxy applicationConfigurationAppService,
         ICurrentUser currentUser,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        AbpApplicationLocalizationClientProxy applicationLocalizationClientProxy,
+        IOptions<AbpAspNetCoreMvcClientCacheOptions> options)
     {
         ApplicationConfigurationAppService = applicationConfigurationAppService;
         CurrentUser = currentUser;
         HttpContextAccessor = httpContextAccessor;
+        ApplicationLocalizationClientProxy = applicationLocalizationClientProxy;
+        Options = options.Value;
         Cache = cache;
-    }
-
-    public async Task InitializeAsync()
-    {
-        await GetAsync();
     }
 
     public async Task<ApplicationConfigurationDto> GetAsync()
@@ -45,23 +42,21 @@ public class MvcCachedApplicationConfigurationClient : ICachedApplicationConfigu
         var cacheKey = CreateCacheKey();
         var httpContext = HttpContextAccessor?.HttpContext;
 
-        if (httpContext != null && !httpContext.WebSockets.IsWebSocketRequest && httpContext.Items[cacheKey] is ApplicationConfigurationDto configuration)
+        if (httpContext != null && httpContext.Items[cacheKey] is ApplicationConfigurationDto configuration)
         {
-
             return configuration;
         }
 
-
         configuration = await Cache.GetOrAddAsync(
             cacheKey,
-            async () => await ApplicationConfigurationAppService.GetAsync(),
+            async () => await GetRemoteConfigurationAsync(),
             () => new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(300) //TODO: Should be configurable.
-                }
+                AbsoluteExpirationRelativeToNow = Options.ApplicationConfigurationDtoCacheAbsoluteExpiration
+            }
         );
 
-        if (httpContext != null && !httpContext.WebSockets.IsWebSocketRequest)
+        if (httpContext != null)
         {
             httpContext.Items[cacheKey] = configuration;
         }
@@ -69,12 +64,33 @@ public class MvcCachedApplicationConfigurationClient : ICachedApplicationConfigu
         return configuration;
     }
 
+    private async Task<ApplicationConfigurationDto> GetRemoteConfigurationAsync()
+    {
+        var config = await ApplicationConfigurationAppService.GetAsync(
+            new ApplicationConfigurationRequestOptions
+            {
+                IncludeLocalizationResources = false
+            }
+        );
+
+        var localizationDto = await ApplicationLocalizationClientProxy.GetAsync(
+            new ApplicationLocalizationRequestDto {
+                CultureName = config.Localization.CurrentCulture.Name,
+                OnlyDynamics = true
+            }
+        );
+
+        config.Localization.Resources = localizationDto.Resources;
+
+        return config;
+    }
+
     public ApplicationConfigurationDto Get()
     {
         var cacheKey = CreateCacheKey();
         var httpContext = HttpContextAccessor?.HttpContext;
 
-        if (httpContext != null && !httpContext.WebSockets.IsWebSocketRequest && httpContext.Items[cacheKey] is ApplicationConfigurationDto configuration)
+        if (httpContext != null && httpContext.Items[cacheKey] is ApplicationConfigurationDto configuration)
         {
             return configuration;
         }

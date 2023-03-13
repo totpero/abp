@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Volo.Abp;
 using Volo.Abp.Modularity;
@@ -21,5 +22,39 @@ public static class ServiceCollectionApplicationExtensions
         [CanBeNull] Action<AbpApplicationCreationOptions> optionsAction = null)
     {
         return AbpApplicationFactory.Create(startupModuleType, services, optionsAction);
+    }
+
+    public async static Task<IAbpApplicationWithExternalServiceProvider> AddApplicationAsync<TStartupModule>(
+        [NotNull] this IServiceCollection services,
+        [CanBeNull] Action<AbpApplicationCreationOptions> optionsAction = null)
+        where TStartupModule : IAbpModule
+    {
+        return await AbpApplicationFactory.CreateAsync<TStartupModule>(services,  optionsAction);
+    }
+
+    public async static Task<IAbpApplicationWithExternalServiceProvider> AddApplicationAsync(
+        [NotNull] this IServiceCollection services,
+        [NotNull] Type startupModuleType,
+        [CanBeNull] Action<AbpApplicationCreationOptions> optionsAction = null)
+    {
+        return await AbpApplicationFactory.CreateAsync(startupModuleType, services, optionsAction);
+    }
+
+    [CanBeNull]
+    public static string GetApplicationName(this IServiceCollection services)
+    {
+        return services.GetSingletonInstance<IApplicationInfoAccessor>().ApplicationName;
+    }
+
+    [NotNull]
+    public static string GetApplicationInstanceId(this IServiceCollection services)
+    {
+        return services.GetSingletonInstance<IApplicationInfoAccessor>().InstanceId;
+    }
+
+    [NotNull]
+    public static IAbpHostEnvironment GetAbpHostEnvironment(this IServiceCollection services)
+    {
+        return services.GetSingletonInstance<IAbpHostEnvironment>();
     }
 }

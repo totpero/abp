@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,6 +10,8 @@ namespace Volo.Abp.Cli.Commands;
 
 public class LoginInfoCommand : IConsoleCommand, ITransientDependency
 {
+    public const string Name = "login-info";
+    
     public ILogger<LoginInfoCommand> Logger { get; set; }
 
     protected AuthService AuthService { get; }
@@ -23,6 +24,12 @@ public class LoginInfoCommand : IConsoleCommand, ITransientDependency
 
     public async Task ExecuteAsync(CommandLineArgs commandLineArgs)
     {
+        if (!AuthService.IsLoggedIn())
+        {
+            Logger.LogError("You are not logged in.");
+            return;
+        }
+        
         var loginInfo = await AuthService.GetLoginInfoAsync();
 
         if (loginInfo == null)
@@ -33,7 +40,7 @@ public class LoginInfoCommand : IConsoleCommand, ITransientDependency
 
         var sb = new StringBuilder();
         sb.AppendLine("");
-        sb.AppendLine($"Login info:");
+        sb.AppendLine("Login info:");
         sb.AppendLine($"Name: {loginInfo.Name}");
         sb.AppendLine($"Surname: {loginInfo.Surname}");
         sb.AppendLine($"Username: {loginInfo.Username}");

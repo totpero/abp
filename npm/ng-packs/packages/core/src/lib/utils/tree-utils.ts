@@ -13,7 +13,7 @@ export class BaseTreeNode<T extends object> {
   }
 }
 
-export function createTreeFromList<T extends object, R extends unknown>(
+export function createTreeFromList<T extends object, R>(
   list: T[],
   keySelector: (item: T) => NodeKey,
   parentKeySelector: typeof keySelector,
@@ -43,7 +43,7 @@ export function createTreeFromList<T extends object, R extends unknown>(
   return tree;
 }
 
-export function createMapFromList<T extends object, R extends unknown>(
+export function createMapFromList<T extends object, R>(
   list: T[],
   keySelector: (item: T) => NodeKey,
   valueMapper: (item: T) => R,
@@ -62,7 +62,7 @@ export function createTreeNodeFilterCreator<T extends object>(
   return (search: string) => {
     const regex = new RegExp('.*' + search + '.*', 'i');
 
-    return function collectNodes(nodes: TreeNode<T>[], matches = []) {
+    return function collectNodes(nodes: TreeNode<T>[], matches: TreeNode<T>[] = []) {
       for (const node of nodes) {
         if (regex.test(mapperFn(node[key]))) matches.push(node);
 
@@ -82,8 +82,8 @@ export type TreeNode<T extends object> = {
   parent?: TreeNode<T>;
 };
 
-type NodeKey = number | string | symbol | undefined | null;
+export type NodeKey = number | string | symbol | undefined | null;
 
-type NodeValue<T extends object, F extends (...args: any) => any> = F extends undefined
+export type NodeValue<T extends object, F extends (...args: any) => any> = F extends undefined
   ? TreeNode<T>
   : ReturnType<F>;

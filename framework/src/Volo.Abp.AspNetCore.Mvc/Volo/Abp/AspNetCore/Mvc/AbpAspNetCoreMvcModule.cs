@@ -36,11 +36,14 @@ using Volo.Abp.Http;
 using Volo.Abp.DynamicProxy;
 using Volo.Abp.GlobalFeatures;
 using Volo.Abp.Http.Modeling;
+using Volo.Abp.Http.ProxyScripting.Generators.JQuery;
 using Volo.Abp.Json;
+using Volo.Abp.Json.SystemTextJson;
 using Volo.Abp.Localization;
 using Volo.Abp.Modularity;
 using Volo.Abp.UI;
 using Volo.Abp.UI.Navigation;
+using Volo.Abp.Validation.Localization;
 
 namespace Volo.Abp.AspNetCore.Mvc;
 
@@ -51,7 +54,8 @@ namespace Volo.Abp.AspNetCore.Mvc;
     typeof(AbpAspNetCoreMvcContractsModule),
     typeof(AbpUiNavigationModule),
     typeof(AbpGlobalFeaturesModule),
-    typeof(AbpDddApplicationModule)
+    typeof(AbpDddApplicationModule),
+    typeof(AbpJsonSystemTextJsonModule)
     )]
 public class AbpAspNetCoreMvcModule : AbpModule
 {
@@ -77,12 +81,12 @@ public class AbpAspNetCoreMvcModule : AbpModule
         {
             var statusCodes = new List<int>
             {
-                    (int) HttpStatusCode.Forbidden,
-                    (int) HttpStatusCode.Unauthorized,
-                    (int) HttpStatusCode.BadRequest,
-                    (int) HttpStatusCode.NotFound,
-                    (int) HttpStatusCode.NotImplemented,
-                    (int) HttpStatusCode.InternalServerError
+                (int) HttpStatusCode.Forbidden,
+                (int) HttpStatusCode.Unauthorized,
+                (int) HttpStatusCode.BadRequest,
+                (int) HttpStatusCode.NotFound,
+                (int) HttpStatusCode.NotImplemented,
+                (int) HttpStatusCode.InternalServerError
             };
 
             options.SupportedResponseTypes.AddIfNotContains(statusCodes.Select(statusCode => new ApiResponseType
@@ -119,7 +123,6 @@ public class AbpAspNetCoreMvcModule : AbpModule
             );
 
         var mvcBuilder = context.Services.AddMvc()
-            .AddRazorRuntimeCompilation()
             .AddDataAnnotationsLocalization(options =>
             {
                 options.DataAnnotationLocalizerProvider = (type, factory) =>
@@ -134,21 +137,18 @@ public class AbpAspNetCoreMvcModule : AbpModule
                     }
 
                     return factory.CreateDefaultOrNull() ??
-                           factory.Create(type);
+                            factory.Create(type);
                 };
             })
             .AddViewLocalization(); //TODO: How to configure from the application? Also, consider to move to a UI module since APIs does not care about it.
 
-        mvcCoreBuilder.AddAbpHybridJson();
-
-        Configure<MvcRazorRuntimeCompilationOptions>(options =>
+        if (context.Services.GetHostingEnvironment().IsDevelopment() &&
+            context.Services.ExecutePreConfiguredActions<AbpAspNetCoreMvcOptions>().EnableRazorRuntimeCompilationOnDevelopment)
         {
-            options.FileProviders.Add(
-                new RazorViewEngineVirtualFileProvider(
-                    context.Services.GetSingletonInstance<IObjectAccessor<IServiceProvider>>()
-                )
-            );
-        });
+            mvcCoreBuilder.AddAbpRazorRuntimeCompilation();
+        }
+
+        mvcCoreBuilder.AddAbpJson();
 
         context.Services.ExecutePreConfiguredActions(mvcBuilder);
 
@@ -175,10 +175,17 @@ public class AbpAspNetCoreMvcModule : AbpModule
         context.Services.Replace(ServiceDescriptor.Singleton<IValidationAttributeAdapterProvider, AbpValidationAttributeAdapterProvider>());
         context.Services.AddSingleton<ValidationAttributeAdapterProvider>();
 
-        Configure<MvcOptions>(mvcOptions =>
-        {
-            mvcOptions.AddAbp(context.Services);
-        });
+        context.Services.AddOptions<MvcOptions>()
+            .Configure<IServiceProvider>((mvcOptions, serviceProvider) =>
+            {
+                mvcOptions.AddAbp(context.Services);
+
+                // serviceProvider is root service provider.
+                var stringLocalizer = serviceProvider.GetRequiredService<IStringLocalizer<AbpValidationResource>>();
+                mvcOptions.ModelBindingMessageProvider.SetValueIsInvalidAccessor(_ => stringLocalizer["The value '{0}' is invalid."]);
+                mvcOptions.ModelBindingMessageProvider.SetNonPropertyValueMustBeANumberAccessor(() => stringLocalizer["The field must be a number."]);
+                mvcOptions.ModelBindingMessageProvider.SetValueMustBeANumberAccessor(value => stringLocalizer["The field {0} must be a number.", value]);
+            });
 
         Configure<AbpEndpointRouterOptions>(options =>
         {
@@ -188,6 +195,11 @@ public class AbpAspNetCoreMvcModule : AbpModule
                 endpointContext.Endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
                 endpointContext.Endpoints.MapRazorPages();
             });
+        });
+
+        Configure<DynamicJavaScriptProxyOptions>(options =>
+        {
+            options.DisableModule("abp");
         });
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,6 +45,12 @@ internal class AbpApplicationWithInternalServiceProvider : AbpApplicationBase, I
         return ServiceProvider;
     }
 
+    public async Task InitializeAsync()
+    {
+        CreateServiceProvider();
+        await InitializeModulesAsync();
+    }
+
     public void Initialize()
     {
         CreateServiceProvider();
@@ -53,6 +60,6 @@ internal class AbpApplicationWithInternalServiceProvider : AbpApplicationBase, I
     public override void Dispose()
     {
         base.Dispose();
-        ServiceScope.Dispose();
+        ServiceScope?.Dispose();
     }
 }

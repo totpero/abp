@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -128,6 +129,7 @@ public class MyProjectNameWebUnifiedModule : AbpModule
             options.Languages.Add(new LanguageInfo("zh-Hant", "zh-Hant", "繁體中文"));
             options.Languages.Add(new LanguageInfo("de-DE", "de-DE", "Deutsch"));
             options.Languages.Add(new LanguageInfo("es", "es", "Español"));
+            options.Languages.Add(new LanguageInfo("el", "el", "Ελληνικά"));
         });
 
         Configure<AbpMultiTenancyOptions>(options =>
@@ -140,7 +142,7 @@ public class MyProjectNameWebUnifiedModule : AbpModule
 #endif
     }
 
-    public override void OnApplicationInitialization(ApplicationInitializationContext context)
+    public async override Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
     {
         var app = context.GetApplicationBuilder();
         var env = context.GetEnvironment();
@@ -180,12 +182,9 @@ public class MyProjectNameWebUnifiedModule : AbpModule
 
         using (var scope = context.ServiceProvider.CreateScope())
         {
-            AsyncHelper.RunSync(async () =>
-            {
-                await scope.ServiceProvider
-                    .GetRequiredService<IDataSeeder>()
-                    .SeedAsync();
-            });
+            await scope.ServiceProvider
+                .GetRequiredService<IDataSeeder>()
+                .SeedAsync();
         }
     }
 }

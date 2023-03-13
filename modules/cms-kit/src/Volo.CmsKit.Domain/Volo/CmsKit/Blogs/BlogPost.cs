@@ -1,13 +1,14 @@
-﻿using JetBrains.Annotations;
-using System;
+﻿using System;
+using JetBrains.Annotations;
 using Volo.Abp;
+using Volo.Abp.Auditing;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 using Volo.CmsKit.Users;
 
 namespace Volo.CmsKit.Blogs;
 
-public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant, IHasEntityVersion
 {
     public virtual Guid BlogId { get; protected set; }
 
@@ -30,6 +31,10 @@ public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public virtual CmsUser Author { get; set; }
 
+    public virtual BlogPostStatus Status { get; set; }
+
+    public virtual int EntityVersion { get; protected set; }
+
     protected BlogPost()
     {
     }
@@ -43,7 +48,9 @@ public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant
         [CanBeNull] string shortDescription = null,
         [CanBeNull] string content = null,
         [CanBeNull] Guid? coverImageMediaId = null,
-        [CanBeNull] Guid? tenantId = null) : base(id)
+        [CanBeNull] Guid? tenantId = null,
+        [CanBeNull] BlogPostStatus? state = null
+        ) : base(id)
     {
         TenantId = tenantId;
         BlogId = blogId;
@@ -53,6 +60,7 @@ public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant
         SetShortDescription(shortDescription);
         SetContent(content);
         CoverImageMediaId = coverImageMediaId;
+        Status = state ?? BlogPostStatus.Draft;
     }
 
     public virtual void SetTitle(string title)
@@ -75,5 +83,20 @@ public class BlogPost : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public virtual void SetContent(string content)
     {
         Content = Check.Length(content, nameof(content), BlogPostConsts.MaxContentLength);
+    }
+
+    public virtual void SetDraft()
+    {
+        Status = BlogPostStatus.Draft;
+    }
+
+    public virtual void SetPublished()
+    {
+        Status = BlogPostStatus.Published;
+    }
+
+    public virtual void SetWaitingForReview()
+    {
+        Status = BlogPostStatus.WaitingForReview;
     }
 }

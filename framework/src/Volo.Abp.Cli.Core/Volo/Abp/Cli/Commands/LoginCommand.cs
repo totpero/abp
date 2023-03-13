@@ -2,13 +2,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using Volo.Abp.Cli.Args;
 using Volo.Abp.Cli.Auth;
-using Volo.Abp.Cli.Http;
 using Volo.Abp.Cli.ProjectBuilding;
 using Volo.Abp.Cli.Utils;
 using Volo.Abp.DependencyInjection;
@@ -18,80 +16,96 @@ namespace Volo.Abp.Cli.Commands;
 
 public class LoginCommand : IConsoleCommand, ITransientDependency
 {
+    public const string Name = "login";
+    
     public ILogger<LoginCommand> Logger { get; set; }
 
     protected AuthService AuthService { get; }
     public ICancellationTokenProvider CancellationTokenProvider { get; }
     public IRemoteServiceExceptionHandler RemoteServiceExceptionHandler { get; }
 
-    private readonly CliHttpClientFactory _cliHttpClientFactory;
-
     public LoginCommand(AuthService authService,
         ICancellationTokenProvider cancellationTokenProvider,
-        IRemoteServiceExceptionHandler remoteServiceExceptionHandler,
-        CliHttpClientFactory cliHttpClientFactory)
+        IRemoteServiceExceptionHandler remoteServiceExceptionHandler)
     {
         AuthService = authService;
         CancellationTokenProvider = cancellationTokenProvider;
         RemoteServiceExceptionHandler = remoteServiceExceptionHandler;
-        _cliHttpClientFactory = cliHttpClientFactory;
         Logger = NullLogger<LoginCommand>.Instance;
     }
 
     public async Task ExecuteAsync(CommandLineArgs commandLineArgs)
     {
-        if (commandLineArgs.Target.IsNullOrEmpty())
+        if (!commandLineArgs.Options.ContainsKey("device"))
         {
-            throw new CliUsageException(
-                "Username name is missing!" +
-                Environment.NewLine + Environment.NewLine +
-                GetUsageInfo()
-            );
-        }
-
-        var organization = commandLineArgs.Options.GetOrNull(Options.Organization.Short, Options.Organization.Long);
-
-        if (await HasMultipleOrganizationAndThisNotSpecified(commandLineArgs, organization))
-        {
-            return;
-        }
-
-        var password = commandLineArgs.Options.GetOrNull(Options.Password.Short, Options.Password.Long);
-        if (password == null)
-        {
-            Console.Write("Password: ");
-            password = ConsoleHelper.ReadSecret();
-            if (password.IsNullOrWhiteSpace())
+            if (commandLineArgs.Target.IsNullOrEmpty())
             {
                 throw new CliUsageException(
-                    "Password is missing!" +
+                    "Username name is missing!" +
                     Environment.NewLine + Environment.NewLine +
                     GetUsageInfo()
                 );
             }
-        }
 
-        try
-        {
-            await AuthService.LoginAsync(
-                commandLineArgs.Target,
-                password,
-                organization
-            );
-        }
-        catch (Exception ex)
-        {
-            LogCliError(ex, commandLineArgs);
-            return;
-        }
+            var organization = commandLineArgs.Options.GetOrNull(Options.Organization.Short, Options.Organization.Long);
 
-        Logger.LogInformation($"Successfully logged in as '{commandLineArgs.Target}'");
+            if (await HasMultipleOrganizationAndThisNotSpecified(commandLineArgs, organization))
+            {
+                return;
+            }
+
+            var password = commandLineArgs.Options.GetOrNull(Options.Password.Short, Options.Password.Long);
+            if (password == null)
+            {
+                Console.Write("Password: ");
+                password = ConsoleHelper.ReadSecret();
+                if (password.IsNullOrWhiteSpace())
+                {
+                    throw new CliUsageException(
+                        "Password is missing!" +
+                        Environment.NewLine + Environment.NewLine +
+                        GetUsageInfo()
+                    );
+                }
+            }
+
+            try
+            {
+                await AuthService.LoginAsync(
+                    commandLineArgs.Target,
+                    password,
+                    organization
+                );
+            }
+            catch (Exception ex)
+            {
+                LogCliError(ex, commandLineArgs);
+                return;
+            }
+
+            Logger.LogInformation($"Successfully logged in as '{commandLineArgs.Target}'");
+        }
+        else
+        {
+            try
+            {
+                await AuthService.DeviceLoginAsync();
+            }
+            catch (Exception ex)
+            {
+                LogCliError(ex, commandLineArgs);
+                return;
+            }
+
+            var loginInfo = await AuthService.GetLoginInfoAsync();
+            Logger.LogInformation($"Successfully logged in as '{loginInfo.Username}'");
+        }
     }
 
     private async Task<bool> HasMultipleOrganizationAndThisNotSpecified(CommandLineArgs commandLineArgs, string organization)
     {
         if (string.IsNullOrWhiteSpace(organization) &&
-            await CheckMultipleOrganizationsAsync(commandLineArgs.Target))
+            await AuthService.CheckMultipleOrganizationsAsync(commandLineArgs.Target))
         {
             Logger.LogError($"You have multiple organizations, please specify your organization with `--organization` parameter.");
             return true;
@@ -148,26 +162,6 @@ public class LoginCommand : IConsoleCommand, ITransientDependency
         return false;
     }
 
-    private async Task<bool> CheckMultipleOrganizationsAsync(string username)
-    {
-        var url = $"{CliUrls.WwwAbpIo}api/license/check-multiple-organizations?username={username}";
-
-        var client = _cliHttpClientFactory.CreateClient();
-
-        using (var response = await client.GetHttpResponseMessageWithRetryAsync(url, CancellationTokenProvider.Token, Logger))
-        {
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new Exception($"ERROR: Remote server returns '{response.StatusCode}'");
-            }
-
-            await RemoteServiceExceptionHandler.EnsureSuccessfulHttpResponseAsync(response);
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<bool>(responseContent);
-        }
-    }
-
     public string GetUsageInfo()
     {
         var sb = new StringBuilder();
@@ -176,6 +170,7 @@ public class LoginCommand : IConsoleCommand, ITransientDependency
         sb.AppendLine("Usage:");
         sb.AppendLine("  abp login <username>");
         sb.AppendLine("  abp login <username> -p <password>");
+        sb.AppendLine("  abp login <username> --device");
         sb.AppendLine("");
         sb.AppendLine("Example:");
         sb.AppendLine("");
